@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  contacts           Contact[]
+  conversations      Conversation[]
+  pipelines          Pipeline[]
+  attendanceSessions AttendanceSession[]
+
+  @@index([createdAt])
+}
+
+model User {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  email     String   @unique
+  role      String   @default("agent") // admin, agent
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company            Company              @relation(fields: [companyId], references: [id])
+  conversations      Conversation[]
+  messages           Message[]
+  attendanceSessions AttendanceSession[]
+  pipelineMovements  PipelineMovement[]
+
+  @@index([companyId])
+  @@index([createdAt])
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  phone     String
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company        @relation(fields: [companyId], references: [id])
+  conversations Conversation[]
+  movements     PipelineMovement[]
+
+  @@unique([companyId, phone])
+  @@index([companyId])
+}
+
+model Pipeline {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company         @relation(fields: [companyId], references: [id])
+  stages  PipelineStage[]
+
+  @@index([companyId])
+}
+
+model PipelineStage {
+  id          String   @id @default(uuid())
+  pipelineId  String
+  name        String
+  order       Int
+  color       String   @default("#E2E8F0")
+  probability Int      @default(0) // 0 to 100
+  isFinal     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pipeline  Pipeline           @relation(fields: [pipelineId], references: [id])
+  movements PipelineMovement[]
+
+  @@index([pipelineId])
+  @@index([order])
+}
+
+model PipelineMovement {
+  id        String   @id @default(uuid())
+  contactId String
+  stageId   String
+  userId    String?
+  enteredAt DateTime @default(now())
+  exitedAt  DateTime?
+  value     Float    @default(0)
+
+  contact Contact       @relation(fields: [contactId], references: [id])
+  stage   PipelineStage @relation(fields: [stageId], references: [id])
+  user    User?         @relation(fields: [userId], references: [id])
+
+  @@index([contactId])
+  @@index([stageId])
+  @@index([enteredAt])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  companyId String
+  contactId String
+  userId    String?
+  status    String   @default("open") // open, closed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company            Company             @relation(fields: [companyId], references: [id])
+  contact            Contact             @relation(fields: [contactId], references: [id])
+  user               User?               @relation(fields: [userId], references: [id])
+  messages           Message[]
+  attendanceSessions AttendanceSession[]
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([status])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  senderType     String   // user, client, bot
+  senderId       String?  // userId or contactId
+  content        String
+  type           String   @default("text") // text, image, audio, document
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User?        @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@index([senderType])
+}
+
+model AttendanceSession {
+  id              String    @id @default(uuid())
+  companyId       String
+  conversationId  String
+  assignedUserId  String
+  startedAt       DateTime  @default(now())
+  firstResponseAt DateTime?
+  endedAt         DateTime?
+
+  company        Company      @relation(fields: [companyId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  user           User         @relation(fields: [assignedUserId], references: [id])
+
+  @@index([companyId])
+  @@index([assignedUserId])
+  @@index([startedAt])
+}
